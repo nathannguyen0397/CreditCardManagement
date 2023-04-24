@@ -26,6 +26,7 @@ public class UserController {
         user.setName(payload.getName());
         user.setEmail(payload.getEmail());
         userRepository.save(user);
+        System.out.println(user.getId());
         return ResponseEntity.ok(user.getId());
     }
 

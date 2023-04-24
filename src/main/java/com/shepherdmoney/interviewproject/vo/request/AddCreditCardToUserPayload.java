@@ -7,8 +7,8 @@ public class AddCreditCardToUserPayload {
 
     private int userId;
 
-    private String cardIssuanceBank;
+    private String IssuanceBank;
 
-    private String cardNumber;
+    private String Number;
 
 }
