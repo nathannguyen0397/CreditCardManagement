@@ -121,8 +121,8 @@ public class CreditCardController {
                     balanceHistory.add(insertIndex, newBalanceHistory);
                 }
 
-                // Step 5: Update the gap entries and the pivot entry
-                int pivotIndex = insertIndex + 1;
+                // Update the gap entries and the pivot entry
+                int pivotIndex = insertIndex;
                 Instant currentDate = transactionDate.plus(Duration.ofDays(1));
 
                 if (pivotIndex < balanceHistory.size()) {
