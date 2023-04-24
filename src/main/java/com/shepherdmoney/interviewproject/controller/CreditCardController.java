@@ -74,16 +74,15 @@ public class CreditCardController {
         }
     }
 
-    //TODO: Given a list of transactions, update credit cards' balance history.
-    //      For example: if today is 4/12, a credit card's balanceHistory is [{date: 4/12, balance: 110}, {date: 4/10, balance: 100}],
-    //      Given a transaction of {date: 4/10, amount: 10}, the new balanceHistory is
-    //      [{date: 4/12, balance: 120}, {date: 4/11, balance: 110}, {date: 4/10, balance: 110}]
-    //      Return 200 OK if update is done and successful, 400 Bad Request if the given card number
-    //        is not associated with a card.
-    //return null;
-
     @PostMapping("/credit-card:update-balance")
     public ResponseEntity<Void> UpdateCreditCardBalanceHistory(@RequestBody UpdateBalancePayload[] payload) {
+        //TODO: Given a list of transactions, update credit cards' balance history.
+        //      For example: if today is 4/12, a credit card's balanceHistory is [{date: 4/12, balance: 110}, {date: 4/10, balance: 100}],
+        //      Given a transaction of {date: 4/10, amount: 10}, the new balanceHistory is
+        //      [{date: 4/12, balance: 120}, {date: 4/11, balance: 110}, {date: 4/10, balance: 110}]
+        //      Return 200 OK if update is done and successful, 400 Bad Request if the given card number
+        //        is not associated with a card.
+        //return null;
         for (UpdateBalancePayload p : payload) {
             Optional<CreditCard> optionalCard = creditCardRepository.findByNumber(p.getNumber());
             if (optionalCard.isPresent()) {
@@ -96,54 +95,49 @@ public class CreditCardController {
 
                 int insertIndex = 0;
                 double previousBalance = 0.0;
-                boolean updateExisting = false;
+                boolean transactionDateFound = false;
 
                 for (int i = 0; i < balanceHistory.size(); i++) {
-                    if (balanceHistory.get(i).getDate().isAfter(transactionDate)) {
-                        insertIndex = i;
-                        if (i > 0) {
-                            previousBalance = balanceHistory.get(i - 1).getBalance();
-                            if (balanceHistory.get(i - 1).getDate().equals(transactionDate)) {
-                                // Update the existing balance history record
-                                double currentBalance = balanceHistory.get(i - 1).getBalance();
-                                double newBalance = currentBalance + transactionAmount;
-                                balanceHistory.get(i - 1).setBalance(newBalance);
-                                updateExisting = true;
-                            }
-                        }
+                    if (balanceHistory.get(i).getDate().equals(transactionDate)) {
+                        balanceHistory.get(i).setBalance(balanceHistory.get(i).getBalance() + transactionAmount);
+                        insertIndex = i + 1;
+                        transactionDateFound = true;
+                        break;
+                    } else if (balanceHistory.get(i).getDate().isBefore(transactionDate)) {
+                        insertIndex = i + 1;
+                        previousBalance = balanceHistory.get(i).getBalance();
+                    } else {
                         break;
                     }
                 }
 
-                if (!updateExisting) {
+                if (!transactionDateFound) {
                     // Create a new balance history entry with the updated balance
                     BalanceHistory newBalanceHistory = new BalanceHistory();
                     newBalanceHistory.setDate(transactionDate);
                     newBalanceHistory.setBalance(previousBalance + transactionAmount);
                     newBalanceHistory.setCreditCard(card);
 
-                    // Insert the new entry of current balance at the correct position
                     balanceHistory.add(insertIndex, newBalanceHistory);
+                }
 
-                    // Update the gap entries and the pivot entry
-                    int pivotIndex = insertIndex + 1;
-                    Instant currentDate = transactionDate.plus(Duration.ofDays(1));
+                // Step 5: Update the gap entries and the pivot entry
+                int pivotIndex = insertIndex + 1;
+                Instant currentDate = transactionDate.plus(Duration.ofDays(1));
 
-                    if (pivotIndex < balanceHistory.size()) {
-                        while (currentDate.isBefore(balanceHistory.get(pivotIndex).getDate())) {
-                            BalanceHistory gapEntry = new BalanceHistory();
-                            gapEntry.setCreditCard(card);
-                            gapEntry.setDate(currentDate);
-                            gapEntry.setBalance(newBalanceHistory.getBalance());
-                            balanceHistory.add(pivotIndex, gapEntry);
+                if (pivotIndex < balanceHistory.size()) {
+                    while (currentDate.isBefore(balanceHistory.get(pivotIndex).getDate())) {
+                        BalanceHistory gapEntry = new BalanceHistory();
+                        gapEntry.setCreditCard(card);
+                        gapEntry.setDate(currentDate);
+                        gapEntry.setBalance(balanceHistory.get(insertIndex).getBalance());
+                        balanceHistory.add(pivotIndex, gapEntry);
 
-                            currentDate = currentDate.plus(Duration.ofDays(1));
-                            pivotIndex++;
-                        }
-
-                        // Update the pivot entry (the entry immediately after the gap)
-                        balanceHistory.get(pivotIndex).setBalance(balanceHistory.get(pivotIndex).getBalance() + transactionAmount);
+                        currentDate = currentDate.plus(Duration.ofDays(1));
+                        pivotIndex++;
                     }
+
+                    balanceHistory.get(pivotIndex).setBalance(balanceHistory.get(pivotIndex).getBalance() + transactionAmount);
                 }
 
                 Collections.reverse(balanceHistory); // Reverse the list back to its original order
@@ -158,7 +152,6 @@ public class CreditCardController {
         // Return 200 OK if all updates are successful
         return ResponseEntity.ok().build();
     }
-
 
 
     public void printBalanceHistoryTable(List<BalanceHistory> balanceHistory) {
@@ -178,7 +171,7 @@ public class CreditCardController {
     
 }
 
-   /* TRUNCATE TABLE BALANCE_HISTORY;
+/* TRUNCATE TABLE BALANCE_HISTORY;
 
 INSERT INTO balance_history (id, credit_card_id, date, balance) VALUES (1, 1, '2023-04-09T00:00:00.000Z', 0);
 INSERT INTO balance_history (id, credit_card_id, date, balance) VALUES (2, 1, '2023-04-12T00:00:00.000Z', 9990);
@@ -188,4 +181,18 @@ SELECT * FROM CREDIT_CARD ;
 SELECT * FROM BALANCE_HISTORY  ;
 
 SELECT * FROM MY_USER   ;
+
+UpdateCreditCardBalanceHistory();
+1. The transaction date is equal to an existing entry's date:
+Payload: [{4/10: 10}]
+Result: 4/12: 120, 4/10: 110, 4/10: 110
+2 The transaction date is between two existing entries:
+Payload: [{4/11: 10}]
+Result: 4/12: 120, 4/11: 110, 4/10: 100
+3 The transaction date is earlier than any existing entry:
+Payload: [{4/9: 10}]
+Result: 4/12: 110, 4/10: 110, 4/9: 10
+The transaction date is later than any existing entry:
+Payload: [{4/13: 10}]
+Result: 4/13: 120, 4/12: 110, 4/10: 100
   */
